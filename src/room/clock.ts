@@ -23,7 +23,7 @@ export class SyncedClock implements Clock {
       const remote = await this.source();
       const t1 = Date.now();
       // Assume symmetric latency.
-      this.offset = remote - (t0 + t1) / 2;
+      this.offset = Math.round(remote - (t0 + t1) / 2);
       this.onDrift?.(this.offset);
     } catch {
       /* keep previous offset */

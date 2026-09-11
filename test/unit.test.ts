@@ -5,6 +5,7 @@ import { generatePublicName, PUBLIC_NAME_RE } from "../src/identity/names.js";
 import { hashToken, newMessageId, newResumeToken, newSessionId } from "../src/identity/tokens.js";
 import { normalizeText } from "../src/messaging/validate.js";
 import { networkIdentity, networkKey } from "../src/net/ip.js";
+import { originMatcher } from "../src/net/origin.js";
 import { roomAt } from "../src/room/day.js";
 import { loadConfig } from "../src/config.js";
 
@@ -217,6 +218,33 @@ describe("network privacy", () => {
     expect(a.dailyHash).not.toContain("203");
     expect(a.dailyHash).not.toBe(b.dailyHash);
     expect(a.blockHash).toBe(b.blockHash);
+  });
+});
+
+describe("origin allow-list", () => {
+  it("tolerates trailing slashes, case and whitespace", () => {
+    const allowed = originMatcher([" https://The-Room-Frontend-mu.vercel.app/ ", "http://localhost:3000"]);
+    expect(allowed("https://the-room-frontend-mu.vercel.app")).toBe(true);
+    expect(allowed("http://localhost:3000")).toBe(true);
+    expect(allowed("http://the-room-frontend-mu.vercel.app")).toBe(false); // scheme matters
+    expect(allowed("https://evil.example")).toBe(false);
+  });
+
+  it("supports narrow host wildcards for preview deployments", () => {
+    const allowed = originMatcher(["https://the-room-frontend-*.vercel.app"]);
+    expect(allowed("https://the-room-frontend-git-main-kundan.vercel.app")).toBe(true);
+    expect(allowed("https://someone-else.vercel.app")).toBe(false);
+    expect(allowed("https://the-room-frontend-.vercel.app")).toBe(false);
+    expect(allowed("https://the-room-frontend-x.vercel.app.evil.com")).toBe(false);
+    expect(allowed("https://the-room-frontend-a/b.vercel.app")).toBe(false);
+  });
+
+  it("rejects entries that are URLs rather than origins", () => {
+    expect(() => loadConfig({ ALLOWED_ORIGINS: "https://the-room.vercel.app/room" })).toThrow(/not an origin/);
+    expect(loadConfig({ ALLOWED_ORIGINS: '"https://A.vercel.app/",http://localhost:3000' }).ALLOWED_ORIGINS).toEqual([
+      "https://a.vercel.app",
+      "http://localhost:3000",
+    ]);
   });
 });
 

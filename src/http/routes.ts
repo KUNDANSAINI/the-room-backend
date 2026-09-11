@@ -73,11 +73,12 @@ export async function handleHttp(srv: RoomServer, req: IncomingMessage, res: Ser
 
     if (path === "/stats") {
       const origin = req.headers.origin;
-      const allowed = srv.config.ALLOWED_ORIGINS;
-      const cors: Record<string, string> = {};
-      if (origin && (allowed.length === 0 ? srv.config.NODE_ENV !== "production" : allowed.includes(origin))) {
+      // Always vary on Origin so a cache never replays one origin's CORS answer to another.
+      const cors: Record<string, string> = { vary: "Origin" };
+      if (origin && srv.isOriginAllowed(origin)) {
         cors["access-control-allow-origin"] = origin;
-        cors["vary"] = "Origin";
+      } else if (origin) {
+        srv.log.debug({ origin }, "stats request from origin not in ALLOWED_ORIGINS");
       }
       if (method === "OPTIONS") return send(res, 204, undefined, { ...cors, "access-control-allow-methods": "GET" });
       if (method !== "GET") return send(res, 405, { error: "method_not_allowed" });

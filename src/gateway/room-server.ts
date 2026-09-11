@@ -8,6 +8,7 @@ import type { Config } from "../config.js";
 import { handleHttp } from "../http/routes.js";
 import { SessionService } from "../identity/sessions.js";
 import { clientIp, networkIdentity } from "../net/ip.js";
+import { originMatcher, type OriginMatcher } from "../net/origin.js";
 import type { Logger } from "../observability/logger.js";
 import type { Metrics } from "../observability/metrics.js";
 import { Close, MAX_FRAME_BYTES, type ChatMessage, type ServerEvent } from "../protocol.js";
@@ -43,6 +44,8 @@ export class RoomServer {
   readonly instanceId: string;
   readonly sessions: SessionService;
   readonly http: Server;
+  /** Browser-origin allow-list for the WebSocket upgrade and CORS. */
+  readonly isOriginAllowed: OriginMatcher;
 
   room: DailyRoom;
   online = 0;
@@ -68,6 +71,9 @@ export class RoomServer {
     this.instanceId = deps.instanceId;
     this.sessions = new SessionService(deps.store);
     this.room = this.computeRoom();
+    const matches = originMatcher(deps.config.ALLOWED_ORIGINS);
+    // An empty list is only permitted outside production (config enforces it) and means "any origin".
+    this.isOriginAllowed = deps.config.ALLOWED_ORIGINS.length ? matches : () => true;
 
     this.wss = new WebSocketServer({
       noServer: true,
@@ -103,7 +109,16 @@ export class RoomServer {
     every(1_000, () => this.checkRoom());
 
     const port = (this.http.address() as AddressInfo).port;
-    this.log.info({ port, room: this.room.roomId, day: this.room.day, endsAt: new Date(this.room.endsAt).toISOString() }, "room server started");
+    this.log.info(
+      {
+        port,
+        room: this.room.roomId,
+        day: this.room.day,
+        endsAt: new Date(this.room.endsAt).toISOString(),
+        allowedOrigins: this.config.ALLOWED_ORIGINS.length ? this.config.ALLOWED_ORIGINS : "any (development)",
+      },
+      "room server started",
+    );
     return port;
   }
 
@@ -157,7 +172,8 @@ export class RoomServer {
     if (this.shuttingDown) return { ok: false, status: 503, reason: "shutting_down" };
 
     const origin = req.headers.origin;
-    if (origin && c.ALLOWED_ORIGINS.length && !c.ALLOWED_ORIGINS.includes(origin)) {
+    if (origin && !this.isOriginAllowed(origin)) {
+      this.log.warn({ origin }, "websocket origin not in ALLOWED_ORIGINS");
       return { ok: false, status: 403, reason: "origin" };
     }
     if (this.conns.size >= c.MAX_CONNECTIONS) return { ok: false, status: 503, reason: "capacity" };

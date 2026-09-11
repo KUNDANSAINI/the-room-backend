@@ -35,7 +35,11 @@ const schema = z.object({
 
   /** Secret used for daily-rotating IP hashing. Required in production. */
   SERVER_SECRET: z.string().default(""),
-  /** Comma-separated list of allowed browser origins for the WebSocket and /stats. */
+  /**
+   * Comma-separated allowed browser origins for the WebSocket and /stats, e.g.
+   * "https://the-room.vercel.app,http://localhost:3000". Scheme + host (+ port), no path.
+   * Trailing slashes/case are normalized; "*" is allowed inside the host for preview URLs.
+   */
   ALLOWED_ORIGINS: list,
   /** Trust X-Forwarded-For / CF-Connecting-IP (only behind a proxy you control). */
   TRUST_PROXY: bool.default(false),
@@ -73,6 +77,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     new Intl.DateTimeFormat("en-US", { timeZone: c.ROOM_TIMEZONE });
   } catch {
     throw new Error(`Invalid ROOM_TIMEZONE: ${c.ROOM_TIMEZONE}`);
+  }
+  c.ALLOWED_ORIGINS = c.ALLOWED_ORIGINS.map((o) => o.trim().replace(/^["']|["']$/g, "").toLowerCase().replace(/\/+$/, ""));
+  const badOrigin = c.ALLOWED_ORIGINS.find((o) => !/^https?:\/\/[a-z0-9.*-]+(:\d+)?$/.test(o));
+  if (badOrigin) {
+    throw new Error(
+      `ALLOWED_ORIGINS entry "${badOrigin}" is not an origin. Use scheme://host[:port] with no path, e.g. https://the-room.vercel.app`,
+    );
   }
   if (c.NODE_ENV === "production") {
     if (c.SERVER_SECRET.length < 32) throw new Error("SERVER_SECRET (>=32 chars) is required in production");
