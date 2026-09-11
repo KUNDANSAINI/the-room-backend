@@ -241,6 +241,10 @@ describe("origin allow-list", () => {
 
   it("rejects entries that are URLs rather than origins", () => {
     expect(() => loadConfig({ ALLOWED_ORIGINS: "https://the-room.vercel.app/room" })).toThrow(/not an origin/);
+    // Bare hosts are read as https (the value that broke the Render deploy).
+    expect(loadConfig({ ALLOWED_ORIGINS: "the-room-frontend-mu.vercel.app" }).ALLOWED_ORIGINS).toEqual([
+      "https://the-room-frontend-mu.vercel.app",
+    ]);
     expect(loadConfig({ ALLOWED_ORIGINS: '"https://A.vercel.app/",http://localhost:3000' }).ALLOWED_ORIGINS).toEqual([
       "https://a.vercel.app",
       "http://localhost:3000",

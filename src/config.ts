@@ -78,7 +78,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   } catch {
     throw new Error(`Invalid ROOM_TIMEZONE: ${c.ROOM_TIMEZONE}`);
   }
-  c.ALLOWED_ORIGINS = c.ALLOWED_ORIGINS.map((o) => o.trim().replace(/^["']|["']$/g, "").toLowerCase().replace(/\/+$/, ""));
+  c.ALLOWED_ORIGINS = c.ALLOWED_ORIGINS.map((o) => {
+    const v = o.trim().replace(/^["']|["']$/g, "").toLowerCase().replace(/\/+$/, "");
+    // A bare host ("the-room.vercel.app") means its https origin — never plain http.
+    return /^[a-z][a-z0-9+.-]*:\/\//.test(v) ? v : `https://${v}`;
+  });
   const badOrigin = c.ALLOWED_ORIGINS.find((o) => !/^https?:\/\/[a-z0-9.*-]+(:\d+)?$/.test(o));
   if (badOrigin) {
     throw new Error(
