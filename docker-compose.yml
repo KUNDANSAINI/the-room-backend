@@ -1,0 +1,39 @@
+# Local two-instance cluster sharing one Redis. Put any L7 load balancer
+# (with WebSocket support) in front of room-a/room-b in real deployments.
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "volatile-ttl"]
+    ports: ["6379:6379"]
+
+  room-a: &room
+    build: .
+    depends_on: [redis]
+    stop_grace_period: 30s
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      SERVER_SECRET: ${SERVER_SECRET:?set SERVER_SECRET (32+ chars)}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ROOM_TIMEZONE: ${ROOM_TIMEZONE:-UTC}
+      CHALLENGE_PROVIDER: ${CHALLENGE_PROVIDER:-none}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      INSTANCE_ID: room-a
+    ports: ["8080:8080"]
+
+  room-b:
+    <<: *room
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      SERVER_SECRET: ${SERVER_SECRET:?set SERVER_SECRET (32+ chars)}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ROOM_TIMEZONE: ${ROOM_TIMEZONE:-UTC}
+      CHALLENGE_PROVIDER: ${CHALLENGE_PROVIDER:-none}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      INSTANCE_ID: room-b
+    ports: ["8081:8080"]
