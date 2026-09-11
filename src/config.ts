@@ -9,7 +9,8 @@ const list = z
   .transform((s) =>
     s
       .split(",")
-      .map((x) => x.trim())
+      // Browsers send Origin without a trailing slash, so "https://x.app/" would never match.
+      .map((x) => x.trim().replace(/\/+$/, ""))
       .filter(Boolean),
   );
 
